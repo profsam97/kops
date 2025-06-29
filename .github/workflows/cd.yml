@@ -38,6 +38,16 @@ jobs:
       with:
         version: 'v1.28.0'
 
+    - name: Check if KUBECONFIG secret is present
+      run: |
+        if [ -z "${{ secrets.KUBECONFIG }}" ]; then
+          echo "KUBECONFIG secret is empty or not set!"
+          exit 1
+        else
+          echo "KUBECONFIG secret is set and has length: ${#KUBECONFIG}"
+          echo "KUBECONFIG SHA256: $(echo "${{ secrets.KUBECONFIG }}" | sha256sum)"
+        fi
+        
     - name: Configure kubectl
       run: |
         # Configure kubectl to connect to your kops cluster
