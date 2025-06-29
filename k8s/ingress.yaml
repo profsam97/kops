@@ -6,19 +6,15 @@ metadata:
   labels:
     app: fastapi-service
   annotations:
-    # Nginx Ingress Controller annotations
     kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     
-    # cert-manager annotations for automatic Let's Encrypt certificates
     cert-manager.io/cluster-issuer: letsencrypt-prod
     
-    # Rate limiting
     nginx.ingress.kubernetes.io/rate-limit: "100"
     nginx.ingress.kubernetes.io/rate-limit-window: "1m"
     
-    # Security headers
     nginx.ingress.kubernetes.io/configuration-snippet: |
       add_header X-Content-Type-Options nosniff;
       add_header X-Frame-Options DENY;
@@ -29,7 +25,7 @@ spec:
   tls:
   - hosts:
     - kops.agroconnect.ng
-    secretName: fastapi-tls-cert  # cert-manager will create this automatically
+    secretName: fastapi-tls-cert
   rules:
   - host: kops.agroconnect.ng
     http:

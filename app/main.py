@@ -37,14 +37,11 @@ class ItemsResponse(BaseModel):
     items: List[Item]
     total: int
 
-# Create metrics with error handling to prevent duplicate registration
 def create_metrics():
     try:
-        # Try to get existing metrics first
         request_count = None
         request_duration = None
         
-        # Check if metrics already exist
         for collector in list(REGISTRY._collector_to_names.keys()):
             if hasattr(collector, '_name'):
                 if collector._name == 'fastapi_requests_total':
@@ -52,7 +49,6 @@ def create_metrics():
                 elif collector._name == 'fastapi_request_duration_seconds':
                     request_duration = collector
         
-        # Create new metrics if they don't exist
         if request_count is None:
             request_count = Counter('fastapi_requests_total', 'Total requests', ['method', 'endpoint', 'status'])
         
@@ -63,16 +59,13 @@ def create_metrics():
         
     except Exception as e:
         logger.warning(f"Error creating metrics: {e}")
-        # Create a custom registry as fallback
         custom_registry = CollectorRegistry()
         request_count = Counter('fastapi_requests_total', 'Total requests', ['method', 'endpoint', 'status'], registry=custom_registry)
         request_duration = Histogram('fastapi_request_duration_seconds', 'Request duration', registry=custom_registry)
         return request_count, request_duration
 
-# Initialize metrics
 REQUEST_COUNT, REQUEST_DURATION = create_metrics()
 
-# In-memory storage
 items_storage: List[Dict] = [
     {"id": 1, "name": "item1", "description": "First item"},
     {"id": 2, "name": "item2", "description": "Second item"},
@@ -85,7 +78,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -94,7 +86,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Graceful shutdown handling
 def signal_handler(signum, frame):
     logger.info(f"Received signal {signum}, shutting down gracefully")
     sys.exit(0)

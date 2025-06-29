@@ -17,7 +17,6 @@ spec:
   minReplicas: 2
   maxReplicas: 50
   
-  # Scaling behavior configuration
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300 
@@ -34,15 +33,14 @@ spec:
       stabilizationWindowSeconds: 60  
       policies:
       - type: Percent
-        value: 50  # Scale up max 50% of current replicas
+        value: 50  
         periodSeconds: 60
       - type: Pods
-        value: 4  # Scale up max 4 pods at a time
+        value: 4 
         periodSeconds: 60
       selectPolicy: Max  
   
   metrics:
-  # CPU utilization target
   - type: Resource
     resource:
       name: cpu
@@ -50,7 +48,6 @@ spec:
         type: Utilization
         averageUtilization: 70
   
-  # Memory utilization target
   - type: Resource
     resource:
       name: memory
@@ -58,7 +55,6 @@ spec:
         type: Utilization
         averageUtilization: 80
   
-  # Custom metrics from Prometheus (requests per second)
   - type: Pods
     pods:
       metric:
@@ -68,7 +64,7 @@ spec:
             app: fastapi-service
       target:
         type: AverageValue
-        averageValue: "100"  # Scale when > 100 RPS per pod
+        averageValue: "100" 
   
 
 ---

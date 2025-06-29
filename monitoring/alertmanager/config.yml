@@ -1,4 +1,3 @@
-# AlertManager configuration for FastAPI service
 global:
   smtp_smarthost: 'smtp.gmail.com:587'
   smtp_from: 'alerts@example.com'
@@ -55,10 +54,9 @@ route:
       receiver: 'business-item-alerts'
 
 receivers:
-# Default receiver
 - name: 'default-receiver'
   email_configs:
-  - to: 'devops-team@example.com'
+  - to: 'app@example.com'
     subject: '[ALERT] {{ .GroupLabels.alertname }} - {{ .GroupLabels.service }}'
     body: |
       {{ range .Alerts }}
@@ -71,7 +69,7 @@ receivers:
 
 - name: 'critical-alerts'
   email_configs:
-  - to: 'devops-team@example.com, sre-team@example.com'
+  - to: 'app@example.com, sre-team@example.com'
     subject: '[CRITICAL] {{ .GroupLabels.alertname }} - {{ .GroupLabels.service }}'
     headers:
       X-Priority: '1'
@@ -233,27 +231,24 @@ receivers:
 
 
 
-# Suppress info alerts when warning or critical alerts are firing
 - source_match_re:
     severity: 'warning|critical'
   target_match:
     severity: 'info'
   equal: ['alertname', 'service']
 
-# Suppress individual pod alerts when deployment alert is firing
 - source_match:
     alertname: 'FastAPIDeploymentReplicaMismatch'
   target_match_re:
     alertname: 'FastAPIPod.*'
   equal: ['service']
 
-# Suppress latency alerts when service is down
 - source_match:
     alertname: 'FastAPIServiceDown'
   target_match_re:
     alertname: 'FastAPI.*Latency'
   equal: ['service', 'instance']
 
-# Templates for customization
+
 templates:
 - '/etc/alertmanager/templates/*.tmpl'

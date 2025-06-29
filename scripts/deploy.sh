@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Simple deployment script for FastAPI service
 set -e
 
 ENVIRONMENT=${1:-staging}
@@ -10,10 +9,8 @@ DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME:-"your-dockerhub-username"}
 echo "🚀 Deploying FastAPI service to $ENVIRONMENT"
 echo "📦 Using image: $DOCKERHUB_USERNAME/fastapi-service:$IMAGE_TAG"
 
-# Update image tag in deployment
 sed -i "s|your-dockerhub-username/fastapi-service:latest|$DOCKERHUB_USERNAME/fastapi-service:$IMAGE_TAG|g" k8s/deployment.yaml
 
-# Update namespace for environment
 if [ "$ENVIRONMENT" = "staging" ]; then
     NAMESPACE="fastapi-staging"
     sed -i "s|fastapi-production|fastapi-staging|g" k8s/*.yaml

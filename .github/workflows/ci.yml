@@ -11,9 +11,6 @@ env:
 
 jobs:
 
-
-
-  # Container security scan
   container-security:
     name: Container Security
     runs-on: ubuntu-latest
@@ -64,8 +61,6 @@ jobs:
           kubectl version --client
           
      
-
-  # Build and push to Docker Hub
   build-and-push:
     name: Build and Push
     runs-on: ubuntu-latest

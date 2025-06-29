@@ -17,7 +17,6 @@ spec:
   - Egress
   
   ingress:
-  # Allow traffic from ingress controllers
   - from:
     - namespaceSelector:
         matchLabels:
@@ -29,14 +28,13 @@ spec:
     - protocol: TCP
       port: 8000
   
-  # Allow traffic from monitoring namespace
   - from:
     - namespaceSelector:
         matchLabels:
           name: monitoring
     ports:
     - protocol: TCP
-      port: 8000  # Metrics endpoint
+      port: 8000  
   
   - from:
     - namespaceSelector:
@@ -52,7 +50,6 @@ spec:
       port: 8000
   
   egress:
-  # Allow DNS resolution
   - to: []
     ports:
     - protocol: UDP
@@ -60,7 +57,6 @@ spec:
     - protocol: TCP
       port: 53
   
-  # Allow HTTPS traffic (for external API calls)
   - to: []
     ports:
     - protocol: TCP
@@ -73,9 +69,9 @@ spec:
           name: monitoring
     ports:
     - protocol: TCP
-      port: 9090  # Prometheus
+      port: 9090 
     - protocol: TCP
-      port: 3000  # Grafana
+      port: 3000  
 
 ---
 # Network policy for monitoring scraping
