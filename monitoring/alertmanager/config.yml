@@ -1,0 +1,259 @@
+# AlertManager configuration for FastAPI service
+global:
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'alerts@example.com'
+  smtp_auth_username: 'alerts@example.com'
+  smtp_auth_password: 'your-app-password'
+  smtp_require_tls: true
+
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: 'default-receiver'
+  routes:
+  - match:
+      severity: critical
+    receiver: 'critical-alerts'
+    group_wait: 10s
+    group_interval: 1m
+    repeat_interval: 5m
+    routes:
+    - match:
+        alertname: FastAPIServiceDown
+      receiver: 'service-down-alerts'
+      group_wait: 0s
+      repeat_interval: 1m
+    
+    - match_re:
+        sla: '.*'
+      receiver: 'sla-breach-alerts'
+      group_wait: 30s
+      repeat_interval: 15m
+
+  - match:
+      severity: warning
+    receiver: 'warning-alerts'
+    group_wait: 1m
+    group_interval: 5m
+    repeat_interval: 1h
+
+  - match:
+      severity: info
+    receiver: 'info-alerts'
+    group_wait: 5m
+    group_interval: 30m
+    repeat_interval: 24h
+
+  - match:
+      service: fastapi
+    receiver: 'business-alerts'
+    routes:
+    - match_re:
+        alertname: '.*Item.*'
+      receiver: 'business-item-alerts'
+
+receivers:
+# Default receiver
+- name: 'default-receiver'
+  email_configs:
+  - to: 'devops-team@example.com'
+    subject: '[ALERT] {{ .GroupLabels.alertname }} - {{ .GroupLabels.service }}'
+    body: |
+      {{ range .Alerts }}
+      Alert: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      Details:
+      {{ range .Labels.SortedPairs }}  - {{ .Name }}: {{ .Value }}
+      {{ end }}
+      {{ end }}
+
+- name: 'critical-alerts'
+  email_configs:
+  - to: 'devops-team@example.com, sre-team@example.com'
+    subject: '[CRITICAL] {{ .GroupLabels.alertname }} - {{ .GroupLabels.service }}'
+    headers:
+      X-Priority: '1'
+    body: |
+      🚨 CRITICAL ALERT 🚨
+      
+      {{ range .Alerts }}
+      Alert: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      Runbook: {{ .Annotations.runbook_url }}
+      
+      Labels:
+      {{ range .Labels.SortedPairs }}  - {{ .Name }}: {{ .Value }}
+      {{ end }}
+      
+      Firing since: {{ .StartsAt }}
+      {{ end }}
+  
+  slack_configs:
+  - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    channel: '#critical-alerts'
+    username: 'AlertManager'
+    icon_emoji: ':fire:'
+    title: '🚨 Critical Alert: {{ .GroupLabels.alertname }}'
+    text: |
+      {{ range .Alerts }}
+      *{{ .Annotations.summary }}*
+      {{ .Annotations.description }}
+      
+      *Runbook:* {{ .Annotations.runbook_url }}
+      {{ end }}
+    actions:
+    - type: button
+      text: 'Runbook'
+      url: '{{ (index .Alerts 0).Annotations.runbook_url }}'
+    - type: button  
+      text: 'Silence'
+      url: '{{ template "slack.default.actionURL" . }}'
+  
+  pagerduty_configs:
+  - routing_key: 'your-pagerduty-integration-key'
+    description: '{{ .GroupLabels.alertname }} - {{ .GroupLabels.service }}'
+    severity: '{{ .GroupLabels.severity }}'
+    details:
+      firing: '{{ .Alerts.Firing | len }}'
+      resolved: '{{ .Alerts.Resolved | len }}'
+
+- name: 'service-down-alerts'
+  email_configs:
+  - to: 'devops-team@example.com, on-call@example.com'
+    subject: '[SERVICE DOWN] FastAPI Service Unavailable'
+    headers:
+      X-Priority: '1'
+    body: |
+      🔴 SERVICE DOWN ALERT 🔴
+      
+      The FastAPI service is currently unavailable.
+      
+      {{ range .Alerts }}
+      Description: {{ .Annotations.description }}
+      Instance: {{ .Labels.instance }}
+      Started: {{ .StartsAt }}
+      {{ end }}
+      
+      Immediate action required!
+  
+  slack_configs:
+  - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    channel: '#incidents'
+    username: 'AlertManager'
+    icon_emoji: ':rotating_light:'
+    title: '🔴 SERVICE DOWN: FastAPI'
+    text: |
+      @channel FastAPI service is DOWN!
+      {{ range .Alerts }}
+      Instance: {{ .Labels.instance }}
+      Duration: {{ .StartsAt }}
+      {{ end }}
+    actions:
+    - type: button
+      text: 'View Grafana'
+      url: 'https://grafana.example.com/d/fastapi-prod-dash'
+    - type: button
+      text: 'Check Logs'
+      url: 'https://kibana.example.com/app/logs'
+
+# SLA breach alerts
+- name: 'sla-breach-alerts'
+  email_configs:
+  - to: 'sre-team@example.com, product-team@example.com'
+    subject: '[SLA BREACH] {{ .GroupLabels.sla }} SLA Violated'
+    body: |
+      ⚠️ SLA BREACH ALERT ⚠️
+      
+      {{ range .Alerts }}
+      SLA Type: {{ .Labels.sla }}
+      Alert: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      Current Value: {{ .Labels.value }}
+      {{ end }}
+  
+  slack_configs:
+  - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    channel: '#sla-alerts'
+    username: 'AlertManager'
+    icon_emoji: ':warning:'
+    title: '⚠️ SLA Breach: {{ .GroupLabels.sla }}'
+
+# Warning alerts
+- name: 'warning-alerts'
+  email_configs:
+  - to: 'devops-team@example.com'
+    subject: '[WARNING] {{ .GroupLabels.alertname }}'
+    body: |
+      ⚠️ Warning Alert
+      
+      {{ range .Alerts }}
+      Alert: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      {{ end }}
+  
+  slack_configs:
+  - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    channel: '#monitoring'
+    username: 'AlertManager'
+    icon_emoji: ':warning:'
+    title: '⚠️ {{ .GroupLabels.alertname }}'
+
+# Info alerts
+- name: 'info-alerts'
+  slack_configs:
+  - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    channel: '#monitoring'
+    username: 'AlertManager'
+    icon_emoji: ':information_source:'
+    title: 'ℹ️ {{ .GroupLabels.alertname }}'
+
+# Business alerts
+- name: 'business-alerts'
+  email_configs:
+  - to: 'business-team@example.com'
+    subject: '[BUSINESS ALERT] {{ .GroupLabels.alertname }}'
+    body: |
+      📊 Business Metrics Alert
+      
+      {{ range .Alerts }}
+      Alert: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      {{ end }}
+
+# Business item-specific alerts
+- name: 'business-item-alerts'
+  slack_configs:
+  - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    channel: '#business-metrics'
+    username: 'AlertManager'
+    icon_emoji: ':chart_with_upwards_trend:'
+    title: '📊 Item Activity Alert'
+
+
+
+# Suppress info alerts when warning or critical alerts are firing
+- source_match_re:
+    severity: 'warning|critical'
+  target_match:
+    severity: 'info'
+  equal: ['alertname', 'service']
+
+# Suppress individual pod alerts when deployment alert is firing
+- source_match:
+    alertname: 'FastAPIDeploymentReplicaMismatch'
+  target_match_re:
+    alertname: 'FastAPIPod.*'
+  equal: ['service']
+
+# Suppress latency alerts when service is down
+- source_match:
+    alertname: 'FastAPIServiceDown'
+  target_match_re:
+    alertname: 'FastAPI.*Latency'
+  equal: ['service', 'instance']
+
+# Templates for customization
+templates:
+- '/etc/alertmanager/templates/*.tmpl'

@@ -1,0 +1,93 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fastapi-hpa
+  namespace: fastapi-production
+  labels:
+    app: fastapi-service
+    component: autoscaling
+  annotations:
+    description: "Horizontal Pod Autoscaler for FastAPI service"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fastapi-deployment
+  
+  minReplicas: 2
+  maxReplicas: 50
+  
+  # Scaling behavior configuration
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300 
+      policies:
+      - type: Percent
+        value: 10 
+        periodSeconds: 60
+      - type: Pods
+        value: 2 
+        periodSeconds: 60
+      selectPolicy: Min 
+    
+    scaleUp:
+      stabilizationWindowSeconds: 60  
+      policies:
+      - type: Percent
+        value: 50  # Scale up max 50% of current replicas
+        periodSeconds: 60
+      - type: Pods
+        value: 4  # Scale up max 4 pods at a time
+        periodSeconds: 60
+      selectPolicy: Max  
+  
+  metrics:
+  # CPU utilization target
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  
+  # Memory utilization target
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  
+  # Custom metrics from Prometheus (requests per second)
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+        selector:
+          matchLabels:
+            app: fastapi-service
+      target:
+        type: AverageValue
+        averageValue: "100"  # Scale when > 100 RPS per pod
+  
+
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: fastapi-pdb
+  namespace: fastapi-production
+  labels:
+    app: fastapi-service
+    component: availability
+  annotations:
+    description: "Pod Disruption Budget to ensure high availability"
+spec:
+  selector:
+    matchLabels:
+      app: fastapi-service
+      component: application
+  
+  minAvailable: 50%
+  

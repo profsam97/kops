@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fastapi-production
+  labels:
+    name: fastapi-production
+    environment: production
+    app: fastapi-service
+  annotations:
+    description: "Production namespace for FastAPI service"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: fastapi-resource-quota
+  namespace: fastapi-production
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    persistentvolumeclaims: "10"
+    pods: "20"
+    services: "10"
+    secrets: "20"
+    configmaps: "20"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: fastapi-limit-range
+  namespace: fastapi-production
+spec:
+  limits:
+  - default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    type: Container
+  - max:
+      cpu: "2"
+      memory: 2Gi
+    min:
+      cpu: 50m
+      memory: 64Mi
+    type: Container

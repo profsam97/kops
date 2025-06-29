@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fastapi-config
+  namespace: fastapi-production
+  labels:
+    app: fastapi-service
+    component: config
+data:
+  APP_NAME: "production-fastapi-service"
+  ENVIRONMENT: "production"
+  PORT: "8000"
+  
+  # Security configuration
+  ALLOWED_HOSTS: "*.example.com,localhost,127.0.0.1"
+  CORS_ORIGINS: "https://app.example.com,https://admin.example.com"
+  
+  MAX_REQUEST_SIZE: "1048576"
+  REQUEST_TIMEOUT: "30"
+  
+  HEALTH_CHECK_TIMEOUT: "5"
+  
+  ENABLE_METRICS: "true"
+  METRICS_PATH: "/metrics"
+  
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  
+
+  ENABLE_SECURITY_HEADERS: "true"
+  DEBUG: "false"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fastapi-logging-config
+  namespace: fastapi-production
+  labels:
+    app: fastapi-service
+    component: logging
+data:
+  logging.conf: |
+    [loggers]
+    keys=root,uvicorn,fastapi
+
+    [handlers]
+    keys=console,file
+
+    [formatters]
+    keys=json,detailed
+
+    [logger_root]
+    level=INFO
+    handlers=console,file
+
+    [logger_uvicorn]
+    level=INFO
+    handlers=console,file
+    qualname=uvicorn
+    propagate=0
+
+    [logger_fastapi]
+    level=INFO
+    handlers=console,file
+    qualname=fastapi
+    propagate=0
+
+    [handler_console]
+    class=StreamHandler
+    level=INFO
+    formatter=json
+    args=(sys.stdout,)
+
+    [handler_file]
+    class=FileHandler
+    level=INFO
+    formatter=detailed
+    args=('/app/logs/app.log',)
+
+    [formatter_json]
+    format={"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s"}
+    datefmt=%Y-%m-%dT%H:%M:%S
+
+    [formatter_detailed]
+    format=%(asctime)s - %(name)s - %(levelname)s - %(message)s
+    datefmt=%Y-%m-%d %H:%M:%S

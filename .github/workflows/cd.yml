@@ -1,0 +1,201 @@
+name: Continuous Deployment
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: false
+        default: 'latest'
+
+env:
+  IMAGE_NAME: 154114/fastapi-service
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment:
+      name: staging
+      url: https://fastapi-staging.example.com
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        # Configure kubectl to connect to your kops cluster
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config
+
+    - name: Verify cluster connection
+      run: |
+        kubectl cluster-info
+        kubectl get nodes
+
+    - name: Set image tag
+      id: image-tag
+      run: |
+        if [ "${{ github.event.inputs.image_tag }}" != "" ]; then
+          echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "tag=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create staging namespace
+      run: |
+        kubectl create namespace fastapi-staging --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy to staging
+      run: |
+        # Update image tag in deployment
+        sed -i "s|154114/fastapi-service:latest|${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}|g" production-deployment/k8s/deployment.yaml
+        sed -i "s|fastapi-production|fastapi-staging|g" production-deployment/k8s/*.yaml
+        
+        # Apply Kubernetes manifests
+        kubectl apply -f production-deployment/k8s/ -n fastapi-staging
+        
+        # Wait for deployment to be ready
+        kubectl rollout status deployment/fastapi-deployment -n fastapi-staging --timeout=300s
+
+    - name: Run smoke tests
+      run: |
+        # Port forward to test the service
+        kubectl port-forward service/fastapi-service 8080:80 -n fastapi-staging &
+        sleep 10
+        
+        # Health check
+        curl -f http://localhost:8080/health || exit 1
+        
+        # API test
+        curl -f http://localhost:8080/items || exit 1
+        
+        echo "Staging smoke tests passed!"
+
+  # Manual approval for production
+  approve-production:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production-approval
+    steps:
+    - name: Manual approval checkpoint
+      run: |
+        echo "Production deployment approved!"
+
+  # Deploy to production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [approve-production]
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment:
+      name: production
+      url: https://fastapi.example.com
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config
+
+    - name: Set image tag
+      id: image-tag
+      run: |
+        if [ "${{ github.event.inputs.image_tag }}" != "" ]; then
+          echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "tag=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create production namespace
+      run: |
+        kubectl create namespace fastapi-production --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy to production
+      run: |
+        # Update image tag in deployment
+        sed -i "s|your-dockerhub-username/fastapi-service:latest|${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}|g" production-deployment/k8s/deployment.yaml
+        
+        # Apply Kubernetes manifests
+        kubectl apply -f production-deployment/k8s/ -n fastapi-production
+        
+        # Wait for deployment to be ready
+        kubectl rollout status deployment/fastapi-deployment -n fastapi-production --timeout=300s
+
+    - name: Verify production deployment
+      run: |
+        kubectl get pods -n fastapi-production
+        kubectl get services -n fastapi-production
+        
+        # Port forward to test the service
+        kubectl port-forward service/fastapi-service 8080:80 -n fastapi-production &
+        sleep 10
+        
+        # Health check
+        curl -f http://localhost:8080/health || exit 1
+        
+        # API test
+        curl -f http://localhost:8080/items || exit 1
+        
+        echo "✅ Production deployment completed successfully!"
+
+    - name: Record deployment
+      run: |
+        echo "Deployment completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "Image: ${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}"
+        echo "Commit: ${{ github.sha }}"
+        echo "Deployed by: ${{ github.actor }}"
+
+  # Rollback capability
+  rollback-production:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'rollback'
+    environment:
+      name: production
+    steps:
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config
+
+    - name: Rollback deployment
+      run: |
+        kubectl rollout undo deployment/fastapi-deployment -n fastapi-production
+        kubectl rollout status deployment/fastapi-deployment -n fastapi-production --timeout=300s
+
+    - name: Verify rollback
+      run: |
+        kubectl get pods -n fastapi-production
+        echo "Rollback completed successfully!"

@@ -1,0 +1,261 @@
+# Prometheus alerting rules for FastAPI service
+groups:
+  - name: fastapi.rules
+    rules:
+    - alert: FastAPIServiceDown
+      expr: up{job="fastapi-service"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: fastapi
+      annotations:
+        summary: "FastAPI service is down"
+        description: "FastAPI service {{ $labels.instance }} has been down for more than 1 minute."
+        runbook_url: "https://runbooks.example.com/fastapi-service-down"
+
+    - alert: FastAPIHighErrorRate
+      expr: |
+        (
+          rate(app_requests_total{status_code=~"5.."}[5m]) /
+          rate(app_requests_total[5m])
+        ) * 100 > 5
+      for: 5m
+      labels:
+        severity: warning
+        service: fastapi
+      annotations:
+        summary: "FastAPI service has high error rate"
+        description: "FastAPI service {{ $labels.instance }} has error rate of {{ $value }}% for more than 5 minutes."
+
+    - alert: FastAPICriticalErrorRate
+      expr: |
+        (
+          rate(app_requests_total{status_code=~"5.."}[5m]) /
+          rate(app_requests_total[5m])
+        ) * 100 > 15
+      for: 2m
+      labels:
+        severity: critical
+        service: fastapi
+      annotations:
+        summary: "FastAPI service has critical error rate"
+        description: "FastAPI service {{ $labels.instance }} has critical error rate of {{ $value }}% for more than 2 minutes."
+
+    - alert: FastAPIHighLatency
+      expr: |
+        histogram_quantile(0.95, rate(app_request_duration_seconds_bucket[5m])) > 0.5
+      for: 5m
+      labels:
+        severity: warning
+        service: fastapi
+      annotations:
+        summary: "FastAPI service has high latency"
+        description: "FastAPI service {{ $labels.instance }} 95th percentile latency is {{ $value }}s for more than 5 minutes."
+
+    - alert: FastAPICriticalLatency
+      expr: |
+        histogram_quantile(0.95, rate(app_request_duration_seconds_bucket[5m])) > 1.0
+      for: 2m
+      labels:
+        severity: critical
+        service: fastapi
+      annotations:
+        summary: "FastAPI service has critical latency"
+        description: "FastAPI service {{ $labels.instance }} 95th percentile latency is {{ $value }}s for more than 2 minutes."
+
+    - alert: FastAPILowRequestRate
+      expr: rate(app_requests_total[5m]) < 1
+      for: 10m
+      labels:
+        severity: warning
+        service: fastapi
+      annotations:
+        summary: "FastAPI service has unusually low request rate"
+        description: "FastAPI service {{ $labels.instance }} request rate is {{ $value }} req/s, which is unusually low."
+
+    - alert: FastAPIHighMemoryUsage
+      expr: |
+        (
+          container_memory_working_set_bytes{pod=~"fastapi-.*"} /
+          container_spec_memory_limit_bytes{pod=~"fastapi-.*"}
+        ) * 100 > 80
+      for: 5m
+      labels:
+        severity: warning
+        service: fastapi
+      annotations:
+        summary: "FastAPI pod has high memory usage"
+        description: "FastAPI pod {{ $labels.pod }} memory usage is {{ $value }}% of limit."
+
+    - alert: FastAPIHighCPUUsage
+      expr: |
+        (
+          rate(container_cpu_usage_seconds_total{pod=~"fastapi-.*"}[5m]) /
+          container_spec_cpu_quota{pod=~"fastapi-.*"} * container_spec_cpu_period{pod=~"fastapi-.*"}
+        ) * 100 > 80
+      for: 5m
+      labels:
+        severity: warning
+        service: fastapi
+      annotations:
+        summary: "FastAPI pod has high CPU usage"
+        description: "FastAPI pod {{ $labels.pod }} CPU usage is {{ $value }}% of limit."
+
+    - alert: FastAPIHealthCheckFailed
+      expr: health_check_status{check_type="readiness"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        service: fastapi
+      annotations:
+        summary: "FastAPI readiness check is failing"
+        description: "FastAPI service {{ $labels.instance }} readiness check has been failing for more than 2 minutes."
+
+  - name: kubernetes.rules
+    rules:
+    - alert: FastAPIPodRestartingTooMuch
+      expr: increase(kube_pod_container_status_restarts_total{pod=~"fastapi-.*"}[1h]) > 5
+      for: 0m
+      labels:
+        severity: warning
+        service: fastapi
+      annotations:
+        summary: "FastAPI pod is restarting too frequently"
+        description: "FastAPI pod {{ $labels.pod }} has restarted {{ $value }} times in the last hour."
+
+    - alert: FastAPIPodNotReady
+      expr: kube_pod_status_ready{condition="false", pod=~"fastapi-.*"} == 1
+      for: 5m
+      labels:
+        severity: critical
+        service: fastapi
+      annotations:
+        summary: "FastAPI pod is not ready"
+        description: "FastAPI pod {{ $labels.pod }} has been not ready for more than 5 minutes."
+
+    - alert: FastAPIDeploymentReplicaMismatch
+      expr: |
+        kube_deployment_spec_replicas{deployment="fastapi-deployment"} !=
+        kube_deployment_status_replicas_available{deployment="fastapi-deployment"}
+      for: 5m
+      labels:
+        severity: warning
+        service: fastapi
+      annotations:
+        summary: "FastAPI deployment has replica mismatch"
+        description: "FastAPI deployment {{ $labels.deployment }} has {{ $value }} available replicas, expected {{ $labels.spec_replicas }}."
+
+    - alert: FastAPIHPAMaxedOut
+      expr: |
+        kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler="fastapi-hpa"} ==
+        kube_horizontalpodautoscaler_spec_max_replicas{horizontalpodautoscaler="fastapi-hpa"}
+      for: 10m
+      labels:
+        severity: warning
+        service: fastapi
+      annotations:
+        summary: "FastAPI HPA has reached maximum replicas"
+        description: "FastAPI HPA {{ $labels.horizontalpodautoscaler }} has been at maximum replicas for more than 10 minutes."
+
+  - name: business.rules
+    rules:
+    - alert: FastAPIUnusualItemCreationRate
+      expr: rate(items_created_total[5m]) > 100
+      for: 5m
+      labels:
+        severity: info
+        service: fastapi
+      annotations:
+        summary: "Unusual item creation rate detected"
+        description: "FastAPI service is creating items at {{ $value }} items/second, which is unusually high."
+
+    - alert: FastAPINoItemActivity
+      expr: rate(items_created_total[30m]) == 0 and rate(items_retrieved_total[30m]) == 0
+      for: 30m
+      labels:
+        severity: warning
+        service: fastapi
+      annotations:
+        summary: "No item activity detected"
+        description: "FastAPI service has had no item creation or retrieval activity for 30 minutes."
+
+
+
+
+  # SLA-based alerts
+  - name: sla.rules
+    rules:
+    - alert: FastAPIAvailabilitySLABreach
+      expr: |
+        (
+          1 - (
+            rate(app_requests_total{status_code=~"5.."}[5m]) /
+            rate(app_requests_total[5m])
+          )
+        ) * 100 < 99.9
+      for: 1m
+      labels:
+        severity: critical
+        service: fastapi
+        sla: availability
+      annotations:
+        summary: "FastAPI availability SLA breach"
+        description: "FastAPI service availability is {{ $value }}%, below the 99.9% SLA threshold."
+
+    # SLA breach - Latency
+    - alert: FastAPILatencySLABreach
+      expr: |
+        histogram_quantile(0.95, rate(app_request_duration_seconds_bucket[5m])) > 0.2
+      for: 5m
+      labels:
+        severity: warning
+        service: fastapi
+        sla: latency
+      annotations:
+        summary: "FastAPI latency SLA breach"
+        description: "FastAPI service 95th percentile latency is {{ $value }}s, above the 200ms SLA threshold."
+
+  # Capacity planning alerts
+  - name: capacity.rules
+    rules:
+    # Approaching resource limits
+    - alert: FastAPIApproachingCPULimit
+      expr: |
+        (
+          rate(container_cpu_usage_seconds_total{pod=~"fastapi-.*"}[5m]) /
+          container_spec_cpu_quota{pod=~"fastapi-.*"} * container_spec_cpu_period{pod=~"fastapi-.*"}
+        ) * 100 > 70
+      for: 10m
+      labels:
+        severity: info
+        service: fastapi
+      annotations:
+        summary: "FastAPI approaching CPU limit"
+        description: "FastAPI pod {{ $labels.pod }} CPU usage is {{ $value }}% of limit."
+
+    - alert: FastAPIApproachingMemoryLimit
+      expr: |
+        (
+          container_memory_working_set_bytes{pod=~"fastapi-.*"} /
+          container_spec_memory_limit_bytes{pod=~"fastapi-.*"}
+        ) * 100 > 70
+      for: 10m
+      labels:
+        severity: info
+        service: fastapi
+      annotations:
+        summary: "FastAPI approaching memory limit"
+        description: "FastAPI pod {{ $labels.pod }} memory usage is {{ $value }}% of limit."
+
+    # Scaling recommendations
+    - alert: FastAPIScalingRecommendation
+      expr: |
+        avg(rate(app_requests_total[5m])) by (job) > 50 and
+        kube_deployment_status_replicas{deployment="fastapi-deployment"} < 10
+      for: 15m
+      labels:
+        severity: info
+        service: fastapi
+      annotations:
+        summary: "FastAPI may benefit from scaling up"
+        description: "FastAPI is handling {{ $value }} req/s with {{ $labels.replicas }} replicas. Consider scaling up."

@@ -1,0 +1,53 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fastapi-ingress
+  namespace: fastapi-production
+  labels:
+    app: fastapi-service
+  annotations:
+    # Nginx Ingress Controller annotations
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Content-Type-Options nosniff;
+      add_header X-Frame-Options DENY;
+      add_header X-XSS-Protection "1; mode=block";
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains";
+
+spec:
+  tls:
+  - hosts:
+    - fastapi.example.com
+    secretName: fastapi-tls-secret
+  rules:
+  - host: fastapi.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: fastapi-service
+            port:
+              number: 80
+
+---
+# TLS Certificate (placeholder - use cert-manager in real deployment)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fastapi-tls-secret
+  namespace: fastapi-production
+type: kubernetes.io/tls
+data:
+  # This is a placeholder - use cert-manager or your own certificates
+  tls.crt: LS0tLS1CRUdJTi== # base64 encoded certificate
+  tls.key: LS0tLS1CRUdJTi== # base64 encoded private key
