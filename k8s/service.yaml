@@ -19,7 +19,6 @@ spec:
   type: ClusterIP
   selector:
     app: fastapi-service
-    component: application
   ports:
   - name: http
     port: 80
@@ -46,7 +45,6 @@ spec:
   clusterIP: None
   selector:
     app: fastapi-service
-    component: application
   ports:
   - name: http
     port: 8000
