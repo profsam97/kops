@@ -74,7 +74,7 @@ jobs:
         sed -i "s|fastapi-production|fastapi-staging|g" k8s/*.yaml
         
         # Apply Kubernetes manifests
-        kubectl apply -f production-deployment/k8s/ -n fastapi-staging
+        kubectl apply -f k8s/ -n fastapi-staging
         
         # Wait for deployment to be ready
         kubectl rollout status deployment/fastapi-deployment -n fastapi-staging --timeout=300s
