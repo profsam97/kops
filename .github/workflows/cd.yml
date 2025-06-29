@@ -197,8 +197,21 @@ jobs:
 
     - name: Configure kubectl
       run: |
+        if [ -z "${{ secrets.KUBECONFIG }}" ]; then
+          echo "KUBECONFIG secret is not set. Please configure it in your repository or environment settings."
+          exit 1
+        fi
+        mkdir -p ~/.kube
         echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
         chmod 600 ~/.kube/config
+        
+        if ! kubectl version --client; then
+          echo "Kubeconfig is invalid. Please check the secret's value."
+          exit 1
+        fi
+
+        ls -la ~/.kube/config
+        echo "Kubeconfig file size: $(wc -c < ~/.kube/config) bytes"
 
     - name: Rollback deployment
       run: |
