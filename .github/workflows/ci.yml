@@ -27,17 +27,17 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r production-deployment/app/requirements.txt
+        pip install -r app/requirements.txt
         pip install pytest black flake8
 
     - name: Code formatting check
       run: |
-        cd production-deployment/app
+        cd app
         black --check --diff .
 
     - name: Linting
       run: |
-        cd production-deployment/app
+        cd app
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
 
@@ -57,12 +57,12 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r production-deployment/app/requirements.txt
+        pip install -r app/requirements.txt
         pip install pytest pytest-asyncio httpx
 
     - name: Run tests
       run: |
-        cd production-deployment/app
+        cd app
         python -c "
         import pytest
         import asyncio
@@ -96,7 +96,7 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build -t ${{ env.IMAGE_NAME }}:scan -f production-deployment/Dockerfile production-deployment/
+        docker build -t ${{ env.IMAGE_NAME }}:scan -f Dockerfile /
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
@@ -119,7 +119,7 @@ jobs:
 
     - name: Validate Kubernetes manifests
       run: |
-        cd production-deployment/k8s
+        cd k8s
         for file in *.yaml; do
           echo "Validating $file"
           kubectl --dry-run=client apply -f "$file" || echo "Validation failed for $file"
@@ -157,8 +157,8 @@ jobs:
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
-        context: production-deployment/
-        file: production-deployment/Dockerfile
+        context: .
+        file: Dockerfile
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
