@@ -7,8 +7,9 @@ from typing import Dict, List
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import Counter, Histogram, generate_latest
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, CollectorRegistry, REGISTRY
 from pydantic import BaseModel
+from starlette.responses import Response
 
 # Configure logging
 logging.basicConfig(
@@ -36,9 +37,40 @@ class ItemsResponse(BaseModel):
     items: List[Item]
     total: int
 
-# Metrics
-REQUEST_COUNT = Counter('fastapi_requests_total', 'Total requests', ['method', 'endpoint', 'status'])
-REQUEST_DURATION = Histogram('fastapi_request_duration_seconds', 'Request duration')
+# Create metrics with error handling to prevent duplicate registration
+def create_metrics():
+    try:
+        # Try to get existing metrics first
+        request_count = None
+        request_duration = None
+        
+        # Check if metrics already exist
+        for collector in list(REGISTRY._collector_to_names.keys()):
+            if hasattr(collector, '_name'):
+                if collector._name == 'fastapi_requests_total':
+                    request_count = collector
+                elif collector._name == 'fastapi_request_duration_seconds':
+                    request_duration = collector
+        
+        # Create new metrics if they don't exist
+        if request_count is None:
+            request_count = Counter('fastapi_requests_total', 'Total requests', ['method', 'endpoint', 'status'])
+        
+        if request_duration is None:
+            request_duration = Histogram('fastapi_request_duration_seconds', 'Request duration')
+            
+        return request_count, request_duration
+        
+    except Exception as e:
+        logger.warning(f"Error creating metrics: {e}")
+        # Create a custom registry as fallback
+        custom_registry = CollectorRegistry()
+        request_count = Counter('fastapi_requests_total', 'Total requests', ['method', 'endpoint', 'status'], registry=custom_registry)
+        request_duration = Histogram('fastapi_request_duration_seconds', 'Request duration', registry=custom_registry)
+        return request_count, request_duration
+
+# Initialize metrics
+REQUEST_COUNT, REQUEST_DURATION = create_metrics()
 
 # In-memory storage
 items_storage: List[Dict] = [
@@ -91,14 +123,22 @@ async def readiness_check():
 @app.get("/metrics")
 async def get_metrics():
     """Prometheus metrics endpoint"""
-    return generate_latest()
+    try:
+        metrics_data = generate_latest()
+        return Response(content=metrics_data, media_type=CONTENT_TYPE_LATEST)
+    except Exception as e:
+        logger.error(f"Error generating metrics: {e}")
+        return Response(content="# Error generating metrics\n", media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/items", response_model=ItemsResponse)
 async def get_items():
     """Get all items"""
     logger.info("Fetching all items")
-    REQUEST_COUNT.labels(method="GET", endpoint="/items", status="200").inc()
+    try:
+        REQUEST_COUNT.labels(method="GET", endpoint="/items", status="200").inc()
+    except Exception as e:
+        logger.warning(f"Error incrementing metrics: {e}")
     
     return ItemsResponse(
         items=[Item(**item) for item in items_storage],
@@ -113,13 +153,19 @@ async def get_item(item_id: int):
     
     item = next((item for item in items_storage if item["id"] == item_id), None)
     if not item:
-        REQUEST_COUNT.labels(method="GET", endpoint="/items/{id}", status="404").inc()
+        try:
+            REQUEST_COUNT.labels(method="GET", endpoint="/items/{id}", status="404").inc()
+        except Exception as e:
+            logger.warning(f"Error incrementing metrics: {e}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Item {item_id} not found"
         )
     
-    REQUEST_COUNT.labels(method="GET", endpoint="/items/{id}", status="200").inc()
+    try:
+        REQUEST_COUNT.labels(method="GET", endpoint="/items/{id}", status="200").inc()
+    except Exception as e:
+        logger.warning(f"Error incrementing metrics: {e}")
     return Item(**item)
 
 
@@ -138,7 +184,10 @@ async def create_item(item_request: CreateItemRequest):
     }
     
     items_storage.append(new_item)
-    REQUEST_COUNT.labels(method="POST", endpoint="/items", status="201").inc()
+    try:
+        REQUEST_COUNT.labels(method="POST", endpoint="/items", status="201").inc()
+    except Exception as e:
+        logger.warning(f"Error incrementing metrics: {e}")
     
     logger.info(f"Created item with ID: {new_id}")
     return Item(**new_item)
@@ -155,14 +204,20 @@ async def delete_item(item_id: int):
     )
     
     if item_index is None:
-        REQUEST_COUNT.labels(method="DELETE", endpoint="/items/{id}", status="404").inc()
+        try:
+            REQUEST_COUNT.labels(method="DELETE", endpoint="/items/{id}", status="404").inc()
+        except Exception as e:
+            logger.warning(f"Error incrementing metrics: {e}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Item {item_id} not found"
         )
     
     deleted_item = items_storage.pop(item_index)
-    REQUEST_COUNT.labels(method="DELETE", endpoint="/items/{id}", status="200").inc()
+    try:
+        REQUEST_COUNT.labels(method="DELETE", endpoint="/items/{id}", status="200").inc()
+    except Exception as e:
+        logger.warning(f"Error incrementing metrics: {e}")
     
     logger.info(f"Deleted item: {deleted_item}")
     return {"message": f"Item {item_id} deleted successfully"}
