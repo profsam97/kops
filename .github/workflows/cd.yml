@@ -130,10 +130,6 @@ jobs:
         echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
         chmod 600 ~/.kube/config
 
-        ls -la ~/.kube/config
-        echo "Kubeconfig file size: $(wc -c < ~/.kube/config) bytes"
-
-
     - name: Set image tag
       id: image-tag
       run: |
