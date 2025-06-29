@@ -60,7 +60,7 @@ jobs:
         if [ "${{ github.event.inputs.image_tag }}" != "" ]; then
           echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
         else
-          echo "tag=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+          echo "tag=main-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
         fi
 
     - name: Create staging namespace
