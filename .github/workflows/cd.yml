@@ -28,7 +28,7 @@ jobs:
     if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
     environment:
       name: staging
-      url: https://fastapi-staging.example.com
+      url: https://staging.kops.agroconnect.ng
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -74,7 +74,7 @@ jobs:
         
         # Update namespace and hostname for staging
         sed -i "s|fastapi-production|fastapi-staging|g" k8s/*.yaml
-        sed -i "s|fastapi.example.com|fastapi-staging.example.com|g" k8s/ingress.yaml
+        sed -i "s|kops.agroconnect.ng|staging.kops.agroconnect.ng|g" k8s/ingress.yaml
         
         # Apply Kubernetes manifests
         kubectl apply -f k8s/ -n fastapi-staging
@@ -117,7 +117,7 @@ jobs:
     if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
     environment:
       name: production
-      url: https://fastapi.example.com
+      url: https://kops.agroconnect.ng
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -152,7 +152,7 @@ jobs:
         sed -i "s|your-dockerhub-username/fastapi-service:latest|${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}|g" k8s/deployment.yaml
         
         # Ensure production uses production hostname (reset any staging changes)
-        sed -i "s|fastapi-staging.example.com|fastapi.example.com|g" k8s/ingress.yaml
+        sed -i "s|staging.kops.agroconnect.ng|kops.agroconnect.ng|g" k8s/ingress.yaml
         
         # Apply Kubernetes manifests
         kubectl apply -f k8s/ -n fastapi-production

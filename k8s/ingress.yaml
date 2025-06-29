@@ -25,10 +25,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - fastapi.example.com
+    - kops.agroconnect.ng
     secretName: fastapi-tls-secret
   rules:
-  - host: fastapi.example.com
+  - host: kops.agroconnect.ng
     http:
       paths:
       - path: /
