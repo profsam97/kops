@@ -11,6 +11,9 @@ metadata:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     
+    # cert-manager annotations for automatic Let's Encrypt certificates
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    
     # Rate limiting
     nginx.ingress.kubernetes.io/rate-limit: "100"
     nginx.ingress.kubernetes.io/rate-limit-window: "1m"
@@ -26,7 +29,7 @@ spec:
   tls:
   - hosts:
     - kops.agroconnect.ng
-    secretName: fastapi-tls-secret
+    secretName: fastapi-tls-cert  # cert-manager will create this automatically
   rules:
   - host: kops.agroconnect.ng
     http:
@@ -38,16 +41,3 @@ spec:
             name: fastapi-service
             port:
               number: 80
-
----
-# TLS Certificate (placeholder - use cert-manager in real deployment)
-apiVersion: v1
-kind: Secret
-metadata:
-  name: fastapi-tls-secret
-  namespace: fastapi-production
-type: kubernetes.io/tls
-data:
-  # This is a placeholder - use cert-manager or your own certificates
-  tls.crt: LS0tLS1CRUdJTi== # base64 encoded certificate
-  tls.key: LS0tLS1CRUdJTi== # base64 encoded private key

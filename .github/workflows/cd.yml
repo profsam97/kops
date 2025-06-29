@@ -75,6 +75,7 @@ jobs:
         # Update namespace and hostname for staging
         sed -i "s|fastapi-production|fastapi-staging|g" k8s/*.yaml
         sed -i "s|kops.agroconnect.ng|staging.kops.agroconnect.ng|g" k8s/ingress.yaml
+        sed -i "s|fastapi-tls-cert|fastapi-staging-tls-cert|g" k8s/ingress.yaml
         
         # Apply Kubernetes manifests
         kubectl apply -f k8s/ -n fastapi-staging
@@ -153,6 +154,7 @@ jobs:
         
         # Ensure production uses production hostname (reset any staging changes)
         sed -i "s|staging.kops.agroconnect.ng|kops.agroconnect.ng|g" k8s/ingress.yaml
+        sed -i "s|fastapi-staging-tls-cert|fastapi-tls-cert|g" k8s/ingress.yaml
         
         # Apply Kubernetes manifests
         kubectl apply -f k8s/ -n fastapi-production
