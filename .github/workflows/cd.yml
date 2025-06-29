@@ -38,16 +38,7 @@ jobs:
       with:
         version: 'v1.28.0'
 
-    - name: Check if KUBECONFIG secret is present
-      run: |
-        if [ -z "${{ secrets.KUBECONFIG }}" ]; then
-          echo "KUBECONFIG secret is empty or not set!"
-          exit 1
-        else
-          echo "KUBECONFIG secret is set and has length: ${#KUBECONFIG}"
-          echo "KUBECONFIG SHA256: $(echo "${{ secrets.KUBECONFIG }}" | sha256sum)"
-        fi
-        
+
     - name: Configure kubectl
       run: |
         mkdir -p ~/.kube
@@ -79,8 +70,8 @@ jobs:
     - name: Deploy to staging
       run: |
         # Update image tag in deployment
-        sed -i "s|154114/fastapi-service:latest|${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}|g" production-deployment/k8s/deployment.yaml
-        sed -i "s|fastapi-production|fastapi-staging|g" production-deployment/k8s/*.yaml
+        sed -i "s|154114/fastapi-service:latest|${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}|g" -deployment/k8s/deployment.yaml
+        sed -i "s|fastapi-production|fastapi-staging|g" k8s/*.yaml
         
         # Apply Kubernetes manifests
         kubectl apply -f production-deployment/k8s/ -n fastapi-staging
@@ -135,6 +126,7 @@ jobs:
 
     - name: Configure kubectl
       run: |
+        mkdir -p ~/.kube
         echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
         chmod 600 ~/.kube/config
 
@@ -154,10 +146,10 @@ jobs:
     - name: Deploy to production
       run: |
         # Update image tag in deployment
-        sed -i "s|your-dockerhub-username/fastapi-service:latest|${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}|g" production-deployment/k8s/deployment.yaml
+        sed -i "s|your-dockerhub-username/fastapi-service:latest|${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}|g" k8s/deployment.yaml
         
         # Apply Kubernetes manifests
-        kubectl apply -f production-deployment/k8s/ -n fastapi-production
+        kubectl apply -f k8s/ -n fastapi-production
         
         # Wait for deployment to be ready
         kubectl rollout status deployment/fastapi-deployment -n fastapi-production --timeout=300s
