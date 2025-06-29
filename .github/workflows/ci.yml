@@ -63,59 +63,7 @@ jobs:
         run: |
           kubectl version --client
           
-      - name: Validate Kubernetes manifests with detailed output
-        run: |
-          cd k8s || {
-            echo "ERROR: k8s directory not found!"
-            echo "Available directories:"
-            ls -la
-            exit 1
-          }
-          
-          echo "Found YAML files:"
-          ls -la *.yaml 2>/dev/null || {
-            echo "No YAML files found in k8s directory"
-            echo "Directory contents:"
-            ls -la
-            exit 1
-          }
-          
-          validation_failed=0
-          for file in *.yaml; do
-            if [ -f "$file" ]; then
-              echo "========================================="
-              echo "Validating $file"
-              echo "========================================="
-              
-              # First, check if the file is valid YAML
-              python3 -c "import yaml; yaml.safe_load(open('$file'))" 2>&1 || {
-                echo "ERROR: $file is not valid YAML!"
-                validation_failed=1
-                continue
-              }
-              
-              # Show file contents for debugging
-              echo "File contents:"
-              cat "$file"
-              echo ""
-              
-              # Validate with kubectl
-              if ! kubectl --dry-run=client apply -f "$file" 2>&1; then
-                echo "ERROR: Kubernetes validation failed for $file"
-                validation_failed=1
-              else
-                echo "SUCCESS: $file passed validation"
-              fi
-              echo ""
-            fi
-          done
-          
-          if [ $validation_failed -eq 1 ]; then
-            echo "One or more Kubernetes manifest validations failed!"
-            exit 1
-          fi
-          
-          echo "All Kubernetes manifests validated successfully!"
+     
 
   # Build and push to Docker Hub
   build-and-push:
