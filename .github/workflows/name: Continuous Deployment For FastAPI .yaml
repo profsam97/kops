@@ -71,10 +71,7 @@ jobs:
       run: |
         # Update image tag in deployment
         sed -i "s|154114/fastapi-service:latest|${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}|g" k8s/deployment.yaml
-        
-        # Update namespace and hostname for staging
         sed -i "s|fastapi-production|fastapi-staging|g" k8s/*.yaml
-        sed -i "s|fastapi.example.com|fastapi-staging.example.com|g" k8s/ingress.yaml
         
         # Apply Kubernetes manifests
         kubectl apply -f k8s/ -n fastapi-staging
@@ -133,6 +130,10 @@ jobs:
         echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
         chmod 600 ~/.kube/config
 
+        ls -la ~/.kube/config
+        echo "Kubeconfig file size: $(wc -c < ~/.kube/config) bytes"
+
+
     - name: Set image tag
       id: image-tag
       run: |
@@ -150,9 +151,6 @@ jobs:
       run: |
         # Update image tag in deployment
         sed -i "s|your-dockerhub-username/fastapi-service:latest|${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}|g" k8s/deployment.yaml
-        
-        # Ensure production uses production hostname (reset any staging changes)
-        sed -i "s|fastapi-staging.example.com|fastapi.example.com|g" k8s/ingress.yaml
         
         # Apply Kubernetes manifests
         kubectl apply -f k8s/ -n fastapi-production
