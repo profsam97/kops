@@ -1,5 +1,4 @@
 name: Continuous Integration
-
 on:
   push:
     branches: [ main, develop ]
@@ -10,81 +9,202 @@ env:
   PYTHON_VERSION: '3.11'
   IMAGE_NAME: 154114/fastapi-service
 
-jobs: 
+jobs:
+  # Code quality checks
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r app/requirements.txt
+          pip install pytest black flake8
+          
+      - name: Code formatting check
+        run: |
+          cd app
+          black --check --diff .
+          
+      - name: Linting
+        run: |
+          cd app
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+
+  # Tests
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r app/requirements.txt
+          pip install pytest pytest-asyncio httpx
+          
+      - name: Run tests
+        run: |
+          cd app
+          python -m pytest -v --tb=short
+
   # Container security scan
   container-security:
     name: Container Security
     runs-on: ubuntu-latest
+    needs: [code-quality]
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Build Docker image
+        run: |
+          echo "Building Docker image..."
+          docker build -t ${{ env.IMAGE_NAME }}:scan -f Dockerfile . || {
+            echo "Docker build failed!"
+            docker system df
+            exit 1
+          }
+          
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:scan
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
 
-    - name: Build Docker image
-      run: |
-        docker build -t ${{ env.IMAGE_NAME }}:scan -f Dockerfile /
-
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ env.IMAGE_NAME }}:scan
-        format: 'table'
-
-  # Kubernetes validation
+  # Kubernetes validation with better error handling
   k8s-validation:
     name: K8s Validation
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Debug - List k8s directory contents
+        run: |
+          echo "Listing k8s directory contents:"
+          ls -la k8s/ || echo "k8s directory not found"
+          echo "Current directory contents:"
+          ls -la
+          
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+          
+      - name: Verify kubectl installation
+        run: |
+          kubectl version --client
+          
+      - name: Validate Kubernetes manifests with detailed output
+        run: |
+          cd k8s || {
+            echo "ERROR: k8s directory not found!"
+            echo "Available directories:"
+            ls -la
+            exit 1
+          }
+          
+          echo "Found YAML files:"
+          ls -la *.yaml 2>/dev/null || {
+            echo "No YAML files found in k8s directory"
+            echo "Directory contents:"
+            ls -la
+            exit 1
+          }
+          
+          validation_failed=0
+          for file in *.yaml; do
+            if [ -f "$file" ]; then
+              echo "========================================="
+              echo "Validating $file"
+              echo "========================================="
+              
+              # First, check if the file is valid YAML
+              python3 -c "import yaml; yaml.safe_load(open('$file'))" 2>&1 || {
+                echo "ERROR: $file is not valid YAML!"
+                validation_failed=1
+                continue
+              }
+              
+              # Show file contents for debugging
+              echo "File contents:"
+              cat "$file"
+              echo ""
+              
+              # Validate with kubectl
+              if ! kubectl --dry-run=client apply -f "$file" 2>&1; then
+                echo "ERROR: Kubernetes validation failed for $file"
+                validation_failed=1
+              else
+                echo "SUCCESS: $file passed validation"
+              fi
+              echo ""
+            fi
+          done
+          
+          if [ $validation_failed -eq 1 ]; then
+            echo "One or more Kubernetes manifest validations failed!"
+            exit 1
+          fi
+          
+          echo "All Kubernetes manifests validated successfully!"
 
-    - name: Set up kubectl
-      uses: azure/setup-kubectl@v3
-      with:
-        version: 'v1.28.0'
-
-    - name: Validate Kubernetes manifests
-      run: |
-        cd k8s
-        for file in *.yaml; do
-          echo "Validating $file"
-          kubectl --dry-run=client apply -f "$file" || echo "Validation failed for $file"
-        done
-
+  # Build and push to Docker Hub
   build-and-push:
     name: Build and Push
     runs-on: ubuntu-latest
-    needs: [ container-security, k8s-validation]
+    needs: [code-quality, test, container-security, k8s-validation]
     if: github.event_name == 'push'
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Login to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: Dockerfile
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
