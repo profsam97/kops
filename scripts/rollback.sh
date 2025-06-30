@@ -23,8 +23,7 @@ fi
 echo "📊 Current revision:"
 kubectl rollout history deployment/fastapi-deployment -n $NAMESPACE --revision=0
 
-# Confirm rollback
-read -p "🤔 Are you sure you want to rollback? (yes/no): " -r
+read -p "Are you sure you want to rollback? (yes/no): " -r
 if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
     echo "❌ Rollback cancelled"
     exit 0

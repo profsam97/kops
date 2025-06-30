@@ -15,7 +15,6 @@ This guide walks you through setting up the entire production-ready FastAPI serv
 
 ### **1.1 Update System**
 ```bash
-# Update package lists
 sudo apt update && sudo apt upgrade -y
 
 # Install essential tools
@@ -24,7 +23,6 @@ sudo apt install -y curl wget unzip git vim htop
 
 ### **1.2 Install Docker**
 ```bash
-# Add Docker's official GPG key
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 
 # Add Docker repository
@@ -82,17 +80,14 @@ aws --version
 
 ### **2.2 Configure AWS CLI**
 ```bash
-# Configure AWS credentials
+# Configure AWS credentials, go to aws and search for iam, create a profile, then on the access tab, create a new access key, give
+# it neccessary permissions like s3, ec2, elb. 
 aws configure
 # Enter your:
 # - AWS Access Key ID
 # - AWS Secret Access Key
-# - Default region (e.g., us-east-1)
-# - Default output format (json)
 
-# Test configuration
-aws sts get-caller-identity
-```
+
 
 ### **2.3 Create S3 Bucket for kops State**
 ```bash
@@ -102,7 +97,6 @@ export KOPS_CLUSTER_NAME=k8s.yourdomain.com
 
 # Create S3 bucket
 aws s3 mb $KOPS_STATE_STORE --region us-east-1
-
 # Enable versioning
 aws s3api put-bucket-versioning --bucket kops-state-your-unique-name --versioning-configuration Status=Enabled
 ```
@@ -126,7 +120,6 @@ kops version
 
 ### **3.2 Create Kubernetes Cluster**
 ```bash
-# Set environment variables
 export KOPS_STATE_STORE=s3://kops-state-your-unique-name
 export KOPS_CLUSTER_NAME=k8s.yourdomain.com
 
@@ -217,33 +210,33 @@ kubectl get pods -n monitoring -w
 
 ### **7.2 Fork/Clone Repository**
 ```bash
-# Clone your repository
-git clone https://github.com/yourusername/your-fastapi-repo.git
-cd your-fastapi-repo
+# Clone  repository
+git clone https://github.com/profsam97/kops.git
+cd kops
 ```
 
 ### **7.3 Update Configuration Files**
 
 **Update Docker Hub username in:**
-- `production-deployment/k8s/deployment.yaml`
-- `production-deployment/.github/workflows/ci.yml`
-- `production-deployment/.github/workflows/cd.yml`
+- `k8s/deployment.yaml`
+- `.github/workflows/ci.yml`
+- `.github/workflows/cd.yml`
 
 ```bash
 # Replace placeholder with your Docker Hub username
-find production-deployment/ -name "*.yaml" -o -name "*.yml" | xargs sed -i 's/your-dockerhub-username/YOUR_ACTUAL_USERNAME/g'
+find  -name "*.yaml" -o -name "*.yml" | xargs sed -i 's/your-dockerhub-username/YOUR_ACTUAL_USERNAME/g'
 ```
 
 **Update domain names in:**
-- `production-deployment/k8s/ingress.yaml`
-- `production-deployment/.github/workflows/cd.yml`
-- `production-deployment/k8s/cert-manager.yaml`
+- `k8s/ingress.yaml`
+- `.github/workflows/cd.yml`
+- `k8s/cert-manager.yaml`
 
 ```bash
 # Replace with your actual domain
-sed -i 's/kops.agroconnect.ng/api.yourdomain.com/g' production-deployment/k8s/ingress.yaml
-sed -i 's/staging.kops.agroconnect.ng/api-staging.yourdomain.com/g' production-deployment/.github/workflows/cd.yml
-sed -i 's/devops@agroconnect.ng/admin@yourdomain.com/g' production-deployment/k8s/cert-manager.yaml
+sed -i 's/kops.agroconnect.ng/api.yourdomain.com/g' k8s/ingress.yaml
+sed -i 's/staging.kops.agroconnect.ng/api-staging.yourdomain.com/g' .github/workflows/cd.yml
+sed -i 's/devops@agroconnect.ng/admin@yourdomain.com/g' k8s/cert-manager.yaml
 ```
 
 ---
@@ -286,14 +279,14 @@ In your domain registrar (Cloudflare, Route53, etc.), create:
 
 ### **10.1 Apply cert-manager Issuers**
 ```bash
-kubectl apply -f production-deployment/k8s/cert-manager.yaml
+kubectl apply -f k8s/cert-manager.yaml
 ```
 
 ### **10.2 Deploy Application**
 ```bash
 # Create namespaces and deploy
-kubectl apply -f production-deployment/k8s/namespace.yaml
-kubectl apply -f production-deployment/k8s/ -n fastapi-production
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/ -n fastapi-production
 
 # Check deployment
 kubectl get pods -n fastapi-production
@@ -410,11 +403,5 @@ After completing this guide, you should have:
 
 ## 💡 **Tips for Success**
 
-1. **Keep your AWS credentials secure** - never commit them to git
-2. **Use strong passwords** for Grafana and other services
-3. **Monitor your AWS costs** - kops creates EC2 instances
-4. **Regular backups** of your kops state store
-5. **Test in staging** before deploying to production
-6. **Monitor certificate expiry** (should auto-renew every 90 days)
+## for secret management we can use vault, its a better option.
 
-**You now have a enterprise-grade, production-ready FastAPI service! 🚀**
